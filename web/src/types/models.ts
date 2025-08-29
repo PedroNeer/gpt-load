@@ -50,9 +50,15 @@ export interface Group {
   endpoint?: string;
   param_overrides: Record<string, unknown>;
   header_rules?: HeaderRule[];
+  key_parsing_method?: string;
   proxy_keys: string;
   created_at?: string;
   updated_at?: string;
+}
+
+// 添加默认值处理函数
+export function getKeyParsingMethod(group: Group): string {
+  return group.key_parsing_method || 'none';
 }
 
 export interface GroupConfigOption {

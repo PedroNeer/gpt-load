@@ -191,7 +191,8 @@ func (s *KeyService) isValidKeyFormat(key string) bool {
 		return false
 	}
 
-	validChars := regexp.MustCompile(`^[a-zA-Z0-9_\-./+=:]+$`)
+	// 支持 URL 编码字符，包括 &, %, ? 等
+	validChars := regexp.MustCompile(`^[a-zA-Z0-9_\-./+=:&%?]+$`)
 	return validChars.MatchString(key)
 }
 

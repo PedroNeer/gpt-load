@@ -7,6 +7,7 @@ import (
 	app_errors "gpt-load/internal/errors"
 	"gpt-load/internal/models"
 	"gpt-load/internal/store"
+	"gpt-load/internal/types"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -69,7 +70,50 @@ func (p *KeyProvider) SelectKey(groupID uint) (*models.APIKey, error) {
 		CreatedAt:    time.Unix(createdAt, 0),
 	}
 
+	// 4. 解析密钥（如果需要）
+	if err := p.parseKey(apiKey, groupID); err != nil {
+		logrus.WithError(err).Warnf("Failed to parse key for group %d, using raw key", groupID)
+		// 解析失败时使用原始密钥
+		apiKey.ParsedKey = &types.ParsedKey{
+			RawKey:    apiKey.KeyValue,
+			ActualKey: apiKey.KeyValue,
+			Params:    make(map[string]string),
+		}
+	}
+
 	return apiKey, nil
+}
+
+// parseKey 解析密钥
+func (p *KeyProvider) parseKey(apiKey *models.APIKey, groupID uint) error {
+	// 获取分组信息以确定解析方式
+	group, err := p.getGroup(groupID)
+	if err != nil {
+		return fmt.Errorf("failed to get group for key parsing: %w", err)
+	}
+
+	// 创建密钥解析器
+	parser := NewKeyParser(group.GetKeyParsingMethod())
+
+	// 解析密钥
+	parsedKey, err := parser.ParseKey(apiKey.KeyValue)
+	if err != nil {
+		return fmt.Errorf("failed to parse key: %w", err)
+	}
+
+	apiKey.ParsedKey = parsedKey
+	return nil
+}
+
+// getGroup 获取分组信息（从缓存或数据库）
+func (p *KeyProvider) getGroup(groupID uint) (*models.Group, error) {
+	// 这里需要从GroupManager获取分组信息
+	// 为了简化，我们先从数据库直接查询
+	var group models.Group
+	if err := p.db.First(&group, groupID).Error; err != nil {
+		return nil, fmt.Errorf("failed to get group %d: %w", groupID, err)
+	}
+	return &group, nil
 }
 
 // UpdateStatus 异步地提交一个 Key 状态更新任务。

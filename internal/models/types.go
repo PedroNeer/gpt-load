@@ -64,6 +64,7 @@ type Group struct {
 	ParamOverrides     datatypes.JSONMap    `gorm:"type:json" json:"param_overrides"`
 	Config             datatypes.JSONMap    `gorm:"type:json" json:"config"`
 	HeaderRules        datatypes.JSON       `gorm:"type:json" json:"header_rules"`
+	KeyParsingMethod   string               `gorm:"type:varchar(50);default:'none'" json:"key_parsing_method"`
 	APIKeys            []APIKey             `gorm:"foreignKey:GroupID" json:"api_keys"`
 	LastValidatedAt    *time.Time           `json:"last_validated_at"`
 	CreatedAt          time.Time            `json:"created_at"`
@@ -72,6 +73,14 @@ type Group struct {
 	// For cache
 	ProxyKeysMap   map[string]struct{} `gorm:"-" json:"-"`
 	HeaderRuleList []HeaderRule        `gorm:"-" json:"-"`
+}
+
+// GetKeyParsingMethod 获取密钥解析，确保向后兼容
+func (g *Group) GetKeyParsingMethod() string {
+	if g.KeyParsingMethod == "" {
+		return "none" // 默认值
+	}
+	return g.KeyParsingMethod
 }
 
 // APIKey 对应 api_keys 表
@@ -85,6 +94,9 @@ type APIKey struct {
 	LastUsedAt   *time.Time `json:"last_used_at"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
+
+	// 解析后的密钥信息（非数据库字段）
+	ParsedKey *types.ParsedKey `gorm:"-" json:"-"`
 }
 
 // RequestType 请求类型常量

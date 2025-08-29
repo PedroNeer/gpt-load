@@ -168,6 +168,7 @@ type GroupCreateRequest struct {
 	ParamOverrides     map[string]any      `json:"param_overrides"`
 	Config             map[string]any      `json:"config"`
 	HeaderRules        []models.HeaderRule `json:"header_rules"`
+	KeyParsingMethod   string              `json:"key_parsing_method"`
 	ProxyKeys          string              `json:"proxy_keys"`
 }
 
@@ -217,34 +218,34 @@ func (s *Server) CreateGroup(c *gin.Context) {
 		return
 	}
 
-	// Validate and normalize header rules if provided
-	var headerRulesJSON datatypes.JSON
-	if len(req.HeaderRules) > 0 {
-		normalizedHeaderRules := make([]models.HeaderRule, 0)
-		seenKeys := make(map[string]bool)
+			// Validate and normalize header rules if provided
+		var headerRulesJSON datatypes.JSON
+		if len(req.HeaderRules) > 0 {
+			normalizedHeaderRules := make([]models.HeaderRule, 0)
+			seenKeys := make(map[string]bool)
 
-		for _, rule := range req.HeaderRules {
-			key := strings.TrimSpace(rule.Key)
-			if key == "" {
-				continue
+			for _, rule := range req.HeaderRules {
+				key := strings.TrimSpace(rule.Key)
+				if key == "" {
+					continue
+				}
+
+				// Normalize to canonical form
+				canonicalKey := http.CanonicalHeaderKey(key)
+
+				// Check for duplicate keys
+				if seenKeys[canonicalKey] {
+					response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, fmt.Sprintf("Duplicate header key: %s", canonicalKey)))
+					return
+				}
+				seenKeys[canonicalKey] = true
+
+				normalizedHeaderRules = append(normalizedHeaderRules, models.HeaderRule{
+					Key:    canonicalKey,
+					Value:  rule.Value,
+					Action: rule.Action,
+				})
 			}
-
-			// Normalize to canonical form
-			canonicalKey := http.CanonicalHeaderKey(key)
-
-			// Check for duplicate keys
-			if seenKeys[canonicalKey] {
-				response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, fmt.Sprintf("Duplicate header key: %s", canonicalKey)))
-				return
-			}
-			seenKeys[canonicalKey] = true
-
-			normalizedHeaderRules = append(normalizedHeaderRules, models.HeaderRule{
-				Key:    canonicalKey,
-				Value:  rule.Value,
-				Action: rule.Action,
-			})
-		}
 
 		if len(normalizedHeaderRules) > 0 {
 			headerRulesBytes, err := json.Marshal(normalizedHeaderRules)
@@ -271,6 +272,7 @@ func (s *Server) CreateGroup(c *gin.Context) {
 		ParamOverrides:     req.ParamOverrides,
 		Config:             cleanedConfig,
 		HeaderRules:        headerRulesJSON,
+		KeyParsingMethod:   strings.TrimSpace(req.KeyParsingMethod),
 		ProxyKeys:          strings.TrimSpace(req.ProxyKeys),
 	}
 
@@ -315,6 +317,7 @@ type GroupUpdateRequest struct {
 	ParamOverrides     map[string]any      `json:"param_overrides"`
 	Config             map[string]any      `json:"config"`
 	HeaderRules        []models.HeaderRule `json:"header_rules"`
+	KeyParsingMethod   *string             `json:"key_parsing_method,omitempty"`
 	ProxyKeys          *string             `json:"proxy_keys,omitempty"`
 }
 
@@ -430,10 +433,12 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 				continue
 			}
 
-			// Normalize to canonical form
+			// 保持原始大小写，但检查重复时使用不区分大小写的比较
+			// 因为某些 API 服务对 header 名称的大小写敏感
+			headerKey := key
 			canonicalKey := http.CanonicalHeaderKey(key)
 
-			// Check for duplicate keys
+			// Check for duplicate keys (case-insensitive)
 			if seenKeys[canonicalKey] {
 				response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, fmt.Sprintf("Duplicate header key: %s", canonicalKey)))
 				return
@@ -441,7 +446,7 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 			seenKeys[canonicalKey] = true
 
 			normalizedHeaderRules = append(normalizedHeaderRules, models.HeaderRule{
-				Key:    canonicalKey,
+				Key:    headerKey, // 保存原始大小写
 				Value:  rule.Value,
 				Action: rule.Action,
 			})
@@ -458,6 +463,17 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 			headerRulesJSON = datatypes.JSON("[]")
 		}
 		group.HeaderRules = headerRulesJSON
+	}
+
+	// Handle key parsing method update
+	if req.KeyParsingMethod != nil {
+		keyParsingMethod := strings.TrimSpace(*req.KeyParsingMethod)
+		// 验证密钥解析
+		if keyParsingMethod != "" && keyParsingMethod != "none" && keyParsingMethod != "urlencode" {
+			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, "无效的密钥解析。支持的值：none, urlencode"))
+			return
+		}
+		group.KeyParsingMethod = keyParsingMethod
 	}
 
 	// Save the updated group object
@@ -492,6 +508,7 @@ type GroupResponse struct {
 	ParamOverrides     datatypes.JSONMap   `json:"param_overrides"`
 	Config             datatypes.JSONMap   `json:"config"`
 	HeaderRules        []models.HeaderRule `json:"header_rules"`
+	KeyParsingMethod   string              `json:"key_parsing_method"`
 	ProxyKeys          string              `json:"proxy_keys"`
 	LastValidatedAt    *time.Time          `json:"last_validated_at"`
 	CreatedAt          time.Time           `json:"created_at"`
@@ -533,6 +550,7 @@ func (s *Server) newGroupResponse(group *models.Group) *GroupResponse {
 		ParamOverrides:     group.ParamOverrides,
 		Config:             group.Config,
 		HeaderRules:        headerRules,
+		KeyParsingMethod:   group.GetKeyParsingMethod(),
 		ProxyKeys:          group.ProxyKeys,
 		LastValidatedAt:    group.LastValidatedAt,
 		CreatedAt:          group.CreatedAt,

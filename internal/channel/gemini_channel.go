@@ -37,11 +37,17 @@ func newGeminiChannel(f *Factory, group *models.Group) (ChannelProxy, error) {
 
 // ModifyRequest adds the API key as a query parameter for Gemini requests.
 func (ch *GeminiChannel) ModifyRequest(req *http.Request, apiKey *models.APIKey, group *models.Group) {
+	// 使用解析后的实际密钥
+	keyValue := apiKey.KeyValue
+	if apiKey.ParsedKey != nil {
+		keyValue = apiKey.ParsedKey.ActualKey
+	}
+
 	if strings.Contains(req.URL.Path, "v1beta/openai") {
-		req.Header.Set("Authorization", "Bearer "+apiKey.KeyValue)
+		req.Header.Set("Authorization", "Bearer "+keyValue)
 	} else {
 		q := req.URL.Query()
-		q.Set("key", apiKey.KeyValue)
+		q.Set("key", keyValue)
 		req.URL.RawQuery = q.Encode()
 	}
 }
@@ -107,7 +113,12 @@ func (ch *GeminiChannel) ValidateKey(ctx context.Context, apiKey *models.APIKey,
 	if err != nil {
 		return false, fmt.Errorf("failed to create gemini validation path: %w", err)
 	}
-	reqURL += "?key=" + apiKey.KeyValue
+	// 使用解析后的实际密钥
+	keyValue := apiKey.KeyValue
+	if apiKey.ParsedKey != nil {
+		keyValue = apiKey.ParsedKey.ActualKey
+	}
+	reqURL += "?key=" + keyValue
 
 	payload := gin.H{
 		"contents": []gin.H{

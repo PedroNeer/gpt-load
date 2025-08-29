@@ -37,7 +37,12 @@ func newOpenAIChannel(f *Factory, group *models.Group) (ChannelProxy, error) {
 
 // ModifyRequest sets the Authorization header for the OpenAI service.
 func (ch *OpenAIChannel) ModifyRequest(req *http.Request, apiKey *models.APIKey, group *models.Group) {
-	req.Header.Set("Authorization", "Bearer "+apiKey.KeyValue)
+	// 使用解析后的实际密钥
+	keyValue := apiKey.KeyValue
+	if apiKey.ParsedKey != nil {
+		keyValue = apiKey.ParsedKey.ActualKey
+	}
+	req.Header.Set("Authorization", "Bearer "+keyValue)
 }
 
 // IsStreamRequest checks if the request is for a streaming response using the pre-read body.
@@ -104,7 +109,14 @@ func (ch *OpenAIChannel) ValidateKey(ctx context.Context, apiKey *models.APIKey,
 	if err != nil {
 		return false, fmt.Errorf("failed to create validation request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+apiKey.KeyValue)
+
+	// 使用解析后的实际密钥
+	keyValue := apiKey.KeyValue
+	if apiKey.ParsedKey != nil {
+		keyValue = apiKey.ParsedKey.ActualKey
+	}
+
+	req.Header.Set("Authorization", "Bearer "+keyValue)
 	req.Header.Set("Content-Type", "application/json")
 
 	// Apply custom header rules if available

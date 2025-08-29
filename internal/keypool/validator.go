@@ -6,6 +6,7 @@ import (
 	"gpt-load/internal/channel"
 	"gpt-load/internal/config"
 	"gpt-load/internal/models"
+	"gpt-load/internal/types"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -51,6 +52,18 @@ func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group
 	if group.EffectiveConfig.AppUrl == "" {
 		group.EffectiveConfig = s.SettingsManager.GetEffectiveConfig(group.Config)
 	}
+
+	// 解析密钥（如果需要）
+	if err := s.keypoolProvider.parseKey(key, group.ID); err != nil {
+		logrus.WithError(err).Warnf("Failed to parse key for validation, using raw key")
+		// 解析失败时使用原始密钥
+		key.ParsedKey = &types.ParsedKey{
+			RawKey:    key.KeyValue,
+			ActualKey: key.KeyValue,
+			Params:    make(map[string]string),
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(group.EffectiveConfig.KeyValidationTimeoutSeconds)*time.Second)
 	defer cancel()
 

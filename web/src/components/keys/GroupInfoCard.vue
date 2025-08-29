@@ -69,6 +69,18 @@ const hasAdvancedConfig = computed(() => {
   );
 });
 
+// 获取密钥解析的显示文本
+function getKeyParsingMethodDisplay(method?: string): string {
+  switch (method) {
+    case "urlencode":
+      return "URL编码";
+    case "none":
+    case "":
+    default:
+      return "不解析";
+  }
+}
+
 async function copyProxyKeys() {
   if (!props.group?.proxy_keys) {
     return;
@@ -460,6 +472,11 @@ function resetPage() {
                     <n-grid-item>
                       <n-form-item label="渠道类型：">
                         {{ group?.channel_type }}
+                      </n-form-item>
+                    </n-grid-item>
+                    <n-grid-item>
+                      <n-form-item label="密钥解析：">
+                        {{ getKeyParsingMethodDisplay(group?.key_parsing_method) }}
                       </n-form-item>
                     </n-grid-item>
                     <n-grid-item>

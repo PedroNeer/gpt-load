@@ -69,6 +69,7 @@ interface GroupFormData {
   config: Record<string, number | string | boolean>;
   configItems: ConfigItem[];
   header_rules: HeaderRuleItem[];
+  key_parsing_method: string;
   proxy_keys: string;
 }
 
@@ -91,6 +92,7 @@ const formData = reactive<GroupFormData>({
   config: {},
   configItems: [] as ConfigItem[],
   header_rules: [] as HeaderRuleItem[],
+  key_parsing_method: "none",
   proxy_keys: "",
 });
 
@@ -98,6 +100,12 @@ const channelTypeOptions = ref<{ label: string; value: string }[]>([]);
 const configOptions = ref<GroupConfigOption[]>([]);
 const channelTypesFetched = ref(false);
 const configOptionsFetched = ref(false);
+
+// 密钥解析选项
+const keyParsingMethodOptions = ref([
+  { label: "不解析", value: "none" },
+  { label: "URL编码", value: "urlencode" },
+]);
 
 // 跟踪用户是否已手动修改过字段（仅在新增模式下使用）
 const userModifiedFields = ref({
@@ -326,6 +334,7 @@ function loadGroupData() {
       value: rule.value || "",
       action: (rule.action as "set" | "remove") || "set",
     })),
+    key_parsing_method: props.group.key_parsing_method || "none",
     proxy_keys: props.group.proxy_keys || "",
   });
 }
@@ -489,6 +498,7 @@ async function handleSubmit() {
           value: rule.value,
           action: rule.action,
         })),
+      key_parsing_method: formData.key_parsing_method,
       proxy_keys: formData.proxy_keys,
     };
 
@@ -674,6 +684,27 @@ async function handleSubmit() {
             <!-- 当gemini渠道时，测试路径不显示，需要一个占位div保持布局 -->
             <div v-else class="form-item-half" />
           </div>
+
+          <!-- 密钥解析 -->
+          <n-form-item label="密钥解析" path="key_parsing_method">
+            <template #label>
+              <div class="form-label-with-tooltip">
+                密钥解析
+                <n-tooltip trigger="hover" placement="top">
+                  <template #trigger>
+                    <n-icon :component="HelpCircleOutline" class="help-icon" />
+                  </template>
+                  选择密钥的解析方式。URL编码模式支持在密钥中携带额外参数，如：key=123&project=abc
+                </n-tooltip>
+              </div>
+            </template>
+            <n-select
+              v-model:value="formData.key_parsing_method"
+              :options="keyParsingMethodOptions"
+              placeholder="选择密钥解析"
+              size="medium"
+            />
+          </n-form-item>
 
           <!-- 代理密钥 -->
           <n-form-item label="代理密钥" path="proxy_keys">
@@ -921,6 +952,8 @@ async function handleSubmit() {
                       • ${GROUP_NAME} - 分组名称
                       <br />
                       • ${API_KEY} - 当前轮询的API密钥
+                      <br />
+                      • ${API_KEY}{param_name} - 从URL编码密钥中提取参数值
                       <br />
                       • ${TIMESTAMP_MS} - 毫秒时间戳
                       <br />
